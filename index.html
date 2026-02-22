@@ -56,8 +56,8 @@
 <div id="login-screen" class="hidden fixed inset-0 z-[200] bg-navy-deep flex items-center justify-center">
   <div class="bg-navy-panel border border-slate-800 rounded-lg shadow-2xl w-full max-w-sm p-8">
     <div class="flex items-center gap-2 mb-8">
-      <div class="size-7 bg-accent-blue rounded-sm flex items-center justify-center">
-        <span class="material-symbols-outlined text-white text-base">rss_feed</span>
+      <div class="size-7 flex items-center justify-center">
+        <span class="material-symbols-outlined text-yellow-300 text-xl" style="font-variation-settings:'FILL' 0,'wght' 300">crown</span>
       </div>
       <h1 class="text-sm font-bold tracking-tight uppercase">RSS<span class="text-accent-blue">King</span></h1>
     </div>
@@ -205,8 +205,8 @@
 <header class="h-10 border-b border-slate-800 bg-navy-panel flex items-center justify-between px-3 shrink-0 z-40">
   <div class="flex items-center gap-6">
     <div class="flex items-center gap-2">
-      <div class="size-5 bg-accent-blue rounded-sm flex items-center justify-center text-white">
-        <span class="material-symbols-outlined text-base">rss_feed</span>
+      <div class="size-5 flex items-center justify-center">
+        <span class="material-symbols-outlined text-yellow-300 text-base" style="font-variation-settings:'FILL' 0,'wght' 300">crown</span>
       </div>
       <h1 class="text-xs font-bold tracking-tight uppercase">RSS<span class="text-accent-blue">King</span></h1>
     </div>
@@ -245,9 +245,9 @@
         <span class="ml-3 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">All</span>
       </button>
       <button data-cat="starred"
-        class="cat-btn flex items-center w-full px-2 py-1.5 hover:bg-slate-800/50 rounded text-slate-400 transition-colors">
-        <span class="material-symbols-outlined text-xl">star</span>
-        <span class="ml-3 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Starred</span>
+        class="cat-btn flex items-center w-full px-2 py-1.5 hover:bg-slate-800/50 rounded text-slate-400 transition-colors text-[11px] font-semibold">
+        <span class="material-symbols-outlined text-yellow-300 text-lg" style="font-variation-settings:'FILL' 0,'wght' 300">crown</span>
+        <span class="ml-3 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Saved</span>
       </button>
       <div class="h-px bg-slate-800 my-1"></div>
       <div id="category-buttons" class="flex flex-col gap-1">
@@ -592,7 +592,7 @@ function makeArticleRow(item, idx) {
     </div>
     <span class="text-[9px] text-slate-500 shrink-0 hidden sm:block">${escHtml(item.source_name || '')}</span>
     <span class="cat-badge" style="${catStyle(item.category)}">${escHtml(item.category || '')}</span>
-    ${isStar ? '<span class="material-symbols-outlined text-accent-blue text-sm shrink-0">star</span>' : ''}
+    ${isStar ? '<span class="material-symbols-outlined text-yellow-300 text-sm shrink-0" style="font-variation-settings:\'FILL\' 0,\'wght\' 300">crown</span>' : ''}
     <span class="text-[9px] text-slate-600 shrink-0">${age}</span>
     <span class="material-symbols-outlined text-slate-700 text-[16px] shrink-0 expand-chevron">chevron_right</span>
   `;
