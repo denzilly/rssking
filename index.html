@@ -592,10 +592,17 @@ function makeArticleRow(item, idx) {
     </div>
     <span class="text-[9px] text-slate-500 shrink-0 hidden sm:block">${escHtml(item.source_name || '')}</span>
     <span class="cat-badge" style="${catStyle(item.category)}">${escHtml(item.category || '')}</span>
-    ${isStar ? '<span class="material-symbols-outlined text-yellow-300 text-sm shrink-0" style="font-variation-settings:\'FILL\' 0,\'wght\' 300">crown</span>' : ''}
+    <button class="save-btn shrink-0 transition-colors leading-none self-center ${isStar ? 'text-yellow-300' : 'text-slate-700 hover:text-yellow-400'}" title="${isStar ? 'Unsave' : 'Save'}">
+      <span class="material-symbols-outlined leading-none" style="font-size:13px;font-variation-settings:'FILL' ${isStar ? 1 : 0},'wght' 300">crown</span>
+    </button>
     <span class="text-[9px] text-slate-600 shrink-0">${age}</span>
     <span class="material-symbols-outlined text-slate-700 text-[16px] shrink-0 expand-chevron">chevron_right</span>
   `;
+
+  row.querySelector('.save-btn').addEventListener('click', e => {
+    e.stopPropagation();
+    toggleStar(item.id);
+  });
 
   const panel = document.createElement('div');
   panel.className = 'article-panel hidden';
@@ -673,8 +680,8 @@ async function markRead(itemId, row) {
 async function toggleStar(itemId) {
   const current = userState[itemId]?.starred || false;
   userState[itemId] = { ...(userState[itemId] || {}), starred: !current };
-  await upsertState(itemId, { starred: !current });
-  renderFeed();
+  renderFeed();                               // optimistic — immediate
+  upsertState(itemId, { starred: !current }); // persist in background
 }
 
 async function upsertState(itemId, patch) {
