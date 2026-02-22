@@ -548,7 +548,7 @@ function renderFeed() {
   const feedEl  = document.getElementById('feed-list');
   const loading = document.getElementById('feed-loading');
 
-  loading.classList.add('hidden');
+  if (loading) loading.classList.add('hidden');
   feedEl.innerHTML = '';
 
   document.getElementById('article-count').textContent = `${items.length} Articles`;

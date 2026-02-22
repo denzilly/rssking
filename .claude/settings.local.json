@@ -5,7 +5,10 @@
       "Bash(gh pr list:*)",
       "mcp__stitch__list_projects",
       "mcp__stitch__generate_screen_from_text",
-      "mcp__stitch__list_screens"
+      "mcp__stitch__list_screens",
+      "mcp__chrome-devtools__list_pages",
+      "mcp__chrome-devtools__navigate_page",
+      "mcp__chrome-devtools__evaluate_script"
     ]
   }
 }
