@@ -13,6 +13,7 @@ import os
 import re
 import hashlib
 import logging
+import socket
 from datetime import datetime, timezone, timedelta
 
 import feedparser
@@ -134,6 +135,7 @@ def summarise(entry: dict, max_chars: int = 500) -> str:
 def main():
     sb = get_supabase()
 
+    socket.setdefaulttimeout(10)
     log.info("Fetching active feeds from Supabase…")
     feeds = fetch_all_active_feeds(sb)
     log.info(f"Found {len(feeds)} active feed(s)")
@@ -155,7 +157,7 @@ def main():
     for feed in feeds:
         log.info(f"Fetching: {feed['name']} ({feed['url']})")
         try:
-            parsed = feedparser.parse(feed["url"], request_headers={"User-Agent": "RSSKing/1.0"}, timeout=10)
+            parsed = feedparser.parse(feed["url"], request_headers={"User-Agent": "RSSKing/1.0"})
         except Exception as e:
             log.warning(f"  Failed to fetch {feed['url']}: {e}")
             continue
