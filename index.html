@@ -43,6 +43,10 @@
                         hover:bg-row-hover cursor-pointer transition-colors; }
   .article-row.read { @apply opacity-50; }
   .article-row.starred { @apply border-l-accent-blue; }
+  .article-row.expanded { @apply bg-row-hover; }
+  .article-panel { @apply bg-navy-panel/60 border-l-2; }
+  .expand-chevron { transition: transform 0.15s ease; }
+  .expand-chevron.open { transform: rotate(90deg); }
 </style>
 </head>
 
@@ -295,6 +299,7 @@ let activeCategory = 'all';
 let activeWindow  = 24;     // hours
 let searchQuery   = '';
 let focusedIndex  = -1;
+let expandedItemId = null;
 
 // ----------------------------------------------------------------
 // Auth
@@ -512,8 +517,11 @@ function makeArticleRow(item, idx) {
   const score   = Math.round(item.score || 0);
   const age     = formatAge(item.published_at);
 
+  const wrapper = document.createElement('div');
+  wrapper.className = 'article-wrapper border-b border-slate-800/50';
+
   const row = document.createElement('div');
-  row.className = `article-row border-b border-slate-800/50 ${isRead ? 'read' : ''} ${isStar ? 'starred' : ''}`;
+  row.className = `article-row ${isRead ? 'read' : ''} ${isStar ? 'starred' : ''}`;
   row.dataset.id  = item.id;
   row.dataset.idx = idx;
   row.dataset.url = item.url;
@@ -527,22 +535,73 @@ function makeArticleRow(item, idx) {
     <span class="cat-badge" style="${catStyle(item.category)}">${escHtml(item.category || '')}</span>
     ${isStar ? '<span class="material-symbols-outlined text-accent-blue text-sm shrink-0">star</span>' : ''}
     <span class="text-[9px] text-slate-600 shrink-0">${age}</span>
+    <span class="material-symbols-outlined text-slate-700 text-[16px] shrink-0 expand-chevron">chevron_right</span>
   `;
 
-  // Click: mark read + open
-  row.addEventListener('click', () => openItem(item, row));
+  const panel = document.createElement('div');
+  panel.className = 'article-panel hidden';
+  panel.style.borderLeftColor = catColor(item.category);
+  panel.innerHTML = `
+    <div class="px-4 py-3">
+      ${item.summary
+        ? `<p class="text-[11px] text-slate-300 leading-relaxed mb-3">${escHtml(item.summary)}</p>`
+        : `<p class="text-[11px] text-slate-600 italic mb-3">No summary available.</p>`}
+      <div class="flex items-center gap-4">
+        <span class="text-[9px] text-slate-500">${escHtml(item.source_name || '')} · ${age}</span>
+        <a href="${escHtml(item.url)}" target="_blank" rel="noopener"
+           class="text-[10px] font-bold text-accent-blue hover:underline flex items-center gap-1"
+           onclick="event.stopPropagation()">
+          Open full article
+          <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+        </a>
+      </div>
+    </div>
+  `;
 
-  // Prevent middle-click from also triggering
+  row.addEventListener('click', () => toggleExpand(item, wrapper));
+
+  // Middle-click: open in new tab directly without expanding
   row.addEventListener('auxclick', e => {
-    if (e.button === 1) openItem(item, row, false);
+    if (e.button === 1) {
+      window.open(item.url, '_blank', 'noopener');
+      markRead(item.id, row);
+    }
   });
 
-  return row;
+  wrapper.appendChild(row);
+  wrapper.appendChild(panel);
+  return wrapper;
 }
 
-async function openItem(item, row, focus = true) {
-  await markRead(item.id, row);
-  window.open(item.url, '_blank', 'noopener');
+function toggleExpand(item, wrapper) {
+  const row   = wrapper.querySelector('.article-row');
+  const panel = wrapper.querySelector('.article-panel');
+  const isOpen = !panel.classList.contains('hidden');
+
+  // Close any other open panel
+  document.querySelectorAll('.article-panel').forEach(p => {
+    if (p !== panel) {
+      p.classList.add('hidden');
+      const r = p.closest('.article-wrapper')?.querySelector('.article-row');
+      if (r) {
+        r.classList.remove('expanded');
+        r.querySelector('.expand-chevron')?.classList.remove('open');
+      }
+    }
+  });
+
+  if (!isOpen) {
+    panel.classList.remove('hidden');
+    row.classList.add('expanded');
+    row.querySelector('.expand-chevron')?.classList.add('open');
+    expandedItemId = item.id;
+    markRead(item.id, row);
+  } else {
+    panel.classList.add('hidden');
+    row.classList.remove('expanded');
+    row.querySelector('.expand-chevron')?.classList.remove('open');
+    expandedItemId = null;
+  }
 }
 
 async function markRead(itemId, row) {
@@ -647,9 +706,7 @@ document.addEventListener('keydown', e => {
     focusedIndex = Math.max(focusedIndex - 1, 0);
     highlightRow(rows);
   } else if (e.key === 'o' && focusedIndex >= 0) {
-    const row = rows[focusedIndex];
-    window.open(row.dataset.url, '_blank', 'noopener');
-    markRead(row.dataset.id, row);
+    rows[focusedIndex].click();
   } else if (e.key === 's' && focusedIndex >= 0) {
     toggleStar(rows[focusedIndex].dataset.id);
   }
