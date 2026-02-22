@@ -11,6 +11,7 @@ Required environment variables:
 """
 
 import os
+import re
 import json
 import logging
 from datetime import datetime, timezone, timedelta
@@ -96,10 +97,16 @@ def fetch_user_starred(sb: Client, user_id: str, limit: int = 30) -> list[dict]:
     return items.data or []
 
 
+def sanitise_text(text: str, max_chars: int = 2000) -> str:
+    """Strip control characters and limit length before embedding in prompts."""
+    cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text)
+    return cleaned[:max_chars]
+
+
 def build_prompt(items: list[dict], profile: dict, starred: list[dict]) -> str:
-    interests     = (profile.get("interests") or "").strip()
-    display_name  = (profile.get("display_name") or "this user").strip()
-    starred_titles = [s["title"] for s in starred]
+    interests     = sanitise_text((profile.get("interests") or "").strip())
+    display_name  = sanitise_text((profile.get("display_name") or "this user").strip(), max_chars=100)
+    starred_titles = [sanitise_text(s["title"], max_chars=200) for s in starred]
 
     # Format article list for Claude
     articles_text = "\n".join(
@@ -158,14 +165,23 @@ def call_claude(client: anthropic.Anthropic, prompt: str) -> dict | None:
 
 def write_digest(sb: Client, user_id: str, items: list[dict], result: dict):
     """Convert Claude's response into a digest row and write to Supabase."""
+    raw_picks = result.get("picks")
+    if not isinstance(raw_picks, list):
+        raw_picks = []
+
     picks = []
-    for pick in result.get("picks", []):
-        idx = pick.get("index", 0) - 1  # convert to 0-based
-        if 0 <= idx < len(items):
-            picks.append({
-                "item_id": items[idx]["id"],
-                "reason":  pick.get("reason", ""),
-            })
+    for pick in raw_picks:
+        if not isinstance(pick, dict):
+            continue
+        one_based = pick.get("index")
+        # Strictly validate: must be an integer in range [1, len(items)]
+        if not isinstance(one_based, int) or not (1 <= one_based <= len(items)):
+            log.warning(f"  Skipping pick with invalid index: {one_based}")
+            continue
+        picks.append({
+            "item_id": items[one_based - 1]["id"],
+            "reason":  str(pick.get("reason", ""))[:500],
+        })
 
     sb.table("digests").insert({
         "user_id":            user_id,

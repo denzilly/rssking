@@ -368,9 +368,10 @@ async function loadAll() {
 async function loadItems() {
   const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  // Get user's feed IDs first
+  // Get user's feed IDs first — explicit user_id filter in addition to RLS
   const { data: feeds } = await sb.from('feeds')
     .select('id')
+    .eq('user_id', currentUser.id)
     .eq('active', true);
 
   if (!feeds || feeds.length === 0) {
@@ -539,8 +540,8 @@ function makeArticleRow(item, idx) {
   return row;
 }
 
-function openItem(item, row, focus = true) {
-  markRead(item.id, row);
+async function openItem(item, row, focus = true) {
+  await markRead(item.id, row);
   window.open(item.url, '_blank', 'noopener');
 }
 
@@ -767,6 +768,15 @@ document.getElementById('add-feed-btn').addEventListener('click', async () => {
     return;
   }
 
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
+  } catch {
+    errEl.textContent = 'URL must start with http:// or https://';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
   const { error } = await sb.from('feeds').insert({
     user_id: currentUser.id, name, url, category, max_items: maxItems, tier, active: true,
   });
@@ -818,7 +828,7 @@ document.getElementById('save-profile-btn').addEventListener('click', async () =
 // Helpers
 // ----------------------------------------------------------------
 function escHtml(str) {
-  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function formatAge(iso) {

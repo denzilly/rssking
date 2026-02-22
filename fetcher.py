@@ -155,7 +155,7 @@ def main():
     for feed in feeds:
         log.info(f"Fetching: {feed['name']} ({feed['url']})")
         try:
-            parsed = feedparser.parse(feed["url"])
+            parsed = feedparser.parse(feed["url"], request_headers={"User-Agent": "RSSKing/1.0"}, timeout=10)
         except Exception as e:
             log.warning(f"  Failed to fetch {feed['url']}: {e}")
             continue
@@ -222,10 +222,12 @@ def main():
 
     log.info(f"Done. {inserted} new item(s) written to Supabase.")
 
-    # Clean up items older than MAX_AGE_DAYS
+    # Clean up items older than MAX_AGE_DAYS (also delete items with no publish date
+    # older than MAX_AGE_DAYS based on fetched_at as a fallback)
     old_cutoff = (datetime.now(timezone.utc) - timedelta(days=MAX_AGE_DAYS)).isoformat()
     try:
         sb.table("items").delete().lt("published_at", old_cutoff).execute()
+        sb.table("items").delete().is_("published_at", "null").lt("fetched_at", old_cutoff).execute()
         log.info("Old items cleaned up.")
     except Exception as e:
         log.warning(f"Cleanup error (non-fatal): {e}")
