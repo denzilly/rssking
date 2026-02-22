@@ -1,0 +1,33 @@
+name: Fetch RSS Feeds
+
+on:
+  schedule:
+    # Every 15 min during active hours Mon-Fri (8am-8pm UTC)
+    - cron: '*/15 8-20 * * 1-5'
+    # Every 30 min during off-hours weekdays
+    - cron: '*/30 21-23,0-7 * * 1-5'
+    # Every hour on weekends
+    - cron: '0 * * * 0,6'
+  workflow_dispatch:  # allow manual trigger from GitHub UI
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run fetcher
+        env:
+          SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python fetcher.py

@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>RSSKing</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Merriweather:wght@300;400;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "navy-deep":  "#060a12",
+          "navy-panel": "#0d1425",
+          "charcoal":   "#1e293b",
+          "accent-blue":"#3b82f6",
+          "text-main":  "#f1f5f9",
+          "text-muted": "#64748b",
+          "row-hover":  "#162035",
+        },
+        fontFamily: {
+          "sans":  ["Inter", "sans-serif"],
+          "serif": ["Merriweather", "serif"],
+        },
+      },
+    },
+  }
+</script>
+<style type="text/tailwindcss">
+  @layer base { body { @apply font-sans bg-navy-deep text-text-main antialiased; } }
+  .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { @apply bg-slate-800 rounded-full; }
+  .cat-badge {
+    @apply text-[8px] px-1.5 py-0.5 rounded-sm font-bold uppercase tracking-tighter
+           bg-opacity-10 border border-opacity-20;
+  }
+  .article-row { @apply flex items-center gap-2 px-3 py-1.5 border-l-2 border-l-transparent
+                        hover:bg-row-hover cursor-pointer transition-colors; }
+  .article-row.read { @apply opacity-50; }
+  .article-row.starred { @apply border-l-accent-blue; }
+</style>
+</head>
+
+<body class="h-screen flex flex-col overflow-hidden">
+
+<!-- ===================== LOGIN SCREEN ===================== -->
+<div id="login-screen" class="hidden fixed inset-0 z-[200] bg-navy-deep flex items-center justify-center">
+  <div class="bg-navy-panel border border-slate-800 rounded-lg shadow-2xl w-full max-w-sm p-8">
+    <div class="flex items-center gap-2 mb-8">
+      <div class="size-7 bg-accent-blue rounded-sm flex items-center justify-center">
+        <span class="material-symbols-outlined text-white text-base">rss_feed</span>
+      </div>
+      <h1 class="text-sm font-bold tracking-tight uppercase">RSS<span class="text-accent-blue">King</span></h1>
+    </div>
+
+    <div id="login-error" class="hidden mb-4 text-[11px] text-red-400 bg-red-400/10 border border-red-400/20 rounded px-3 py-2"></div>
+
+    <div class="space-y-3">
+      <input id="login-email" type="email" placeholder="Email"
+        class="w-full bg-navy-deep border border-slate-800 rounded px-3 py-2 text-xs
+               focus:ring-1 focus:ring-accent-blue outline-none placeholder:text-slate-600"/>
+      <input id="login-password" type="password" placeholder="Password"
+        class="w-full bg-navy-deep border border-slate-800 rounded px-3 py-2 text-xs
+               focus:ring-1 focus:ring-accent-blue outline-none placeholder:text-slate-600"/>
+      <button id="login-btn"
+        class="w-full bg-accent-blue text-white text-[10px] font-bold uppercase tracking-wider
+               py-2 rounded hover:opacity-90 transition-opacity">
+        Sign in
+      </button>
+    </div>
+
+    <p class="mt-4 text-[10px] text-slate-600 text-center">
+      No account yet? Ask the admin to invite you.
+    </p>
+  </div>
+</div>
+
+<!-- ===================== MANAGE FEEDS MODAL ===================== -->
+<div id="modal-overlay" class="hidden fixed inset-0 z-[100] items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+  <div class="bg-navy-panel border border-slate-800 w-full max-w-2xl h-[70vh] rounded-lg shadow-2xl flex flex-col overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-accent-blue">settings_suggest</span>
+        <h2 class="text-sm font-bold uppercase tracking-widest text-white">Manage Feeds</h2>
+      </div>
+      <button id="modal-close" class="text-slate-500 hover:text-white transition-colors">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <!-- Modal tabs -->
+    <div class="px-6 border-b border-slate-800 bg-navy-deep/20 shrink-0">
+      <nav class="flex gap-6">
+        <button data-tab="feeds"
+          class="modal-tab py-3 text-[10px] font-bold uppercase tracking-widest border-b-2 border-accent-blue text-accent-blue">
+          Feeds
+        </button>
+        <button data-tab="profile"
+          class="modal-tab py-3 text-[10px] font-bold uppercase tracking-widest border-b-2 border-transparent text-slate-500 hover:text-white transition-colors">
+          My Profile
+        </button>
+      </nav>
+    </div>
+
+    <!-- Feeds tab -->
+    <div id="tab-feeds" class="flex-1 flex flex-col min-h-0">
+      <div class="p-6 border-b border-slate-800 shrink-0">
+        <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Add New Feed</h3>
+        <div class="grid grid-cols-2 gap-2">
+          <input id="new-feed-name" type="text" placeholder="Name (e.g. Financial Times)"
+            class="bg-navy-deep border border-slate-800 rounded px-3 py-2 text-xs focus:ring-1 focus:ring-accent-blue outline-none placeholder:text-slate-600 col-span-2"/>
+          <input id="new-feed-url" type="url" placeholder="RSS URL"
+            class="bg-navy-deep border border-slate-800 rounded px-3 py-2 text-xs focus:ring-1 focus:ring-accent-blue outline-none placeholder:text-slate-600 col-span-2"/>
+          <input id="new-feed-category" type="text" placeholder="Category (e.g. Finance)"
+            class="bg-navy-deep border border-slate-800 rounded px-3 py-2 text-xs focus:ring-1 focus:ring-accent-blue outline-none placeholder:text-slate-600"/>
+          <div class="flex gap-2">
+            <input id="new-feed-max" type="number" placeholder="Max items" value="10" min="1" max="50"
+              class="w-1/2 bg-navy-deep border border-slate-800 rounded px-3 py-2 text-xs focus:ring-1 focus:ring-accent-blue outline-none"/>
+            <select id="new-feed-tier"
+              class="w-1/2 bg-navy-deep border border-slate-800 rounded px-3 py-2 text-xs focus:ring-1 focus:ring-accent-blue outline-none text-slate-300">
+              <option value="2">Standard</option>
+              <option value="1">Curated</option>
+            </select>
+          </div>
+        </div>
+        <button id="add-feed-btn"
+          class="mt-3 bg-accent-blue text-white px-4 py-2 rounded hover:opacity-90 transition-opacity flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
+          <span class="material-symbols-outlined text-sm">add</span> Add Feed
+        </button>
+        <div id="add-feed-error" class="hidden mt-2 text-[11px] text-red-400"></div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto custom-scrollbar p-6 pt-4">
+        <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Your Feeds</h3>
+        <div id="feeds-list" class="space-y-1">
+          <div class="text-[11px] text-slate-600 py-4 text-center">Loading feeds…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile tab -->
+    <div id="tab-profile" class="hidden flex-1 p-6 flex flex-col gap-4">
+      <div>
+        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Display Name</label>
+        <input id="profile-name" type="text" placeholder="Your name"
+          class="w-full bg-navy-deep border border-slate-800 rounded px-3 py-2 text-xs focus:ring-1 focus:ring-accent-blue outline-none placeholder:text-slate-600"/>
+      </div>
+      <div class="flex-1 flex flex-col">
+        <label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">
+          Interests <span class="normal-case font-normal text-slate-600 ml-1">— used by Claude to personalise your daily digest</span>
+        </label>
+        <textarea id="profile-interests" rows="6" placeholder="e.g. AI safety, climate tech, venture capital, philosophy of mind, effective altruism, emerging markets…"
+          class="flex-1 w-full bg-navy-deep border border-slate-800 rounded px-3 py-2 text-xs focus:ring-1 focus:ring-accent-blue outline-none placeholder:text-slate-600 resize-none"></textarea>
+      </div>
+      <button id="save-profile-btn"
+        class="self-end bg-accent-blue text-white px-6 py-2 rounded hover:opacity-90 transition-opacity text-[10px] font-bold uppercase tracking-wider">
+        Save Profile
+      </button>
+      <div id="profile-status" class="hidden text-[11px] text-green-400"></div>
+    </div>
+
+    <div class="p-4 border-t border-slate-800 bg-navy-deep/50 flex justify-between items-center shrink-0">
+      <button id="sign-out-btn" class="text-[10px] text-slate-500 hover:text-red-400 transition-colors uppercase tracking-wider font-bold flex items-center gap-1">
+        <span class="material-symbols-outlined text-sm">logout</span> Sign out
+      </button>
+      <button id="modal-close-footer"
+        class="px-4 py-2 border border-slate-700 text-slate-400 text-[10px] font-bold uppercase tracking-wider rounded hover:bg-slate-800 transition-colors">
+        Close
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== HEADER ===================== -->
+<header class="h-10 border-b border-slate-800 bg-navy-panel flex items-center justify-between px-3 shrink-0 z-40">
+  <div class="flex items-center gap-6">
+    <div class="flex items-center gap-2">
+      <div class="size-5 bg-accent-blue rounded-sm flex items-center justify-center text-white">
+        <span class="material-symbols-outlined text-base">rss_feed</span>
+      </div>
+      <h1 class="text-xs font-bold tracking-tight uppercase">RSS<span class="text-accent-blue">King</span></h1>
+    </div>
+    <div class="flex gap-4 h-full items-center border-l border-slate-800 pl-4">
+      <button data-window="24" class="window-btn text-accent-blue text-[10px] font-bold uppercase tracking-wider px-1">Today</button>
+      <button data-window="168" class="window-btn text-slate-500 hover:text-slate-300 text-[10px] font-bold uppercase tracking-wider px-1">This Week</button>
+      <button data-window="720" class="window-btn text-slate-500 hover:text-slate-300 text-[10px] font-bold uppercase tracking-wider px-1">This Month</button>
+    </div>
+  </div>
+  <div class="flex items-center gap-4">
+    <div class="relative w-48">
+      <span class="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-xs">search</span>
+      <input id="search-input" type="text" placeholder="Search…"
+        class="w-full bg-navy-deep border border-slate-800 rounded px-7 py-0.5 text-[10px]
+               focus:ring-1 focus:ring-accent-blue outline-none placeholder:text-slate-600 text-text-main"/>
+    </div>
+    <div class="h-4 w-px bg-slate-800"></div>
+    <button id="manage-feeds-btn"
+      class="flex items-center gap-1.5 px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded
+             text-[9px] font-bold uppercase tracking-wider text-slate-300 transition-colors border border-slate-700">
+      <span class="material-symbols-outlined text-sm">settings</span>
+      Manage Feeds
+    </button>
+  </div>
+</header>
+
+<!-- ===================== MAIN LAYOUT ===================== -->
+<div class="flex flex-1 overflow-hidden">
+
+  <!-- Sidebar: category filter -->
+  <aside class="w-14 hover:w-48 transition-all duration-300 border-r border-slate-800 bg-navy-panel flex flex-col shrink-0 z-30 group">
+    <div class="flex flex-col flex-1 p-2 gap-1 overflow-hidden">
+      <button data-cat="all"
+        class="cat-btn flex items-center w-full px-2 py-1.5 bg-accent-blue/10 text-accent-blue rounded text-[11px] font-semibold">
+        <span class="material-symbols-outlined text-xl">inbox</span>
+        <span class="ml-3 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">All</span>
+      </button>
+      <button data-cat="starred"
+        class="cat-btn flex items-center w-full px-2 py-1.5 hover:bg-slate-800/50 rounded text-slate-400 transition-colors">
+        <span class="material-symbols-outlined text-xl">star</span>
+        <span class="ml-3 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">Starred</span>
+      </button>
+      <div class="h-px bg-slate-800 my-1"></div>
+      <div id="category-buttons" class="flex flex-col gap-1">
+        <!-- injected by JS -->
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main feed -->
+  <main class="flex-1 flex flex-col bg-navy-deep overflow-hidden">
+
+    <!-- Digest banner (hidden until a digest exists) -->
+    <div id="digest-banner" class="hidden border-b border-slate-800 bg-navy-panel/50 px-4 py-3">
+      <div class="flex items-start gap-3">
+        <span class="material-symbols-outlined text-accent-blue mt-0.5 shrink-0">smart_toy</span>
+        <div class="min-w-0">
+          <p class="text-[10px] font-bold text-accent-blue uppercase tracking-widest mb-1">Daily Digest</p>
+          <p id="digest-overview" class="text-[11px] text-slate-300 leading-relaxed"></p>
+          <div id="digest-picks" class="mt-2 flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Article list -->
+    <div id="feed-list" class="flex-1 overflow-y-auto custom-scrollbar">
+      <div id="feed-loading" class="p-10 text-center text-slate-600 text-[11px] uppercase tracking-widest">
+        Loading…
+      </div>
+    </div>
+
+    <!-- Status bar -->
+    <div class="h-6 border-t border-slate-800 bg-navy-panel flex items-center justify-between px-3 shrink-0">
+      <span id="article-count" class="text-[8px] font-bold text-slate-500 uppercase">— Articles</span>
+      <span class="text-[8px] font-bold text-slate-500 uppercase flex items-center gap-2">
+        <span class="flex gap-1">
+          <kbd class="bg-navy-deep px-1 rounded border border-slate-700">J</kbd>
+          <kbd class="bg-navy-deep px-1 rounded border border-slate-700">K</kbd>
+          Navigate
+        </span>
+        <span class="flex gap-1">
+          <kbd class="bg-navy-deep px-1 rounded border border-slate-700">S</kbd>
+          Star
+        </span>
+        <span class="flex gap-1">
+          <kbd class="bg-navy-deep px-1 rounded border border-slate-700">O</kbd>
+          Open
+        </span>
+      </span>
+    </div>
+  </main>
+</div>
+
+<!-- ===================== APP SCRIPT ===================== -->
+<script>
+// ----------------------------------------------------------------
+// CONFIG — replace with your Supabase project values
+// ----------------------------------------------------------------
+const SUPABASE_URL = 'https://yqgodnzrpxpzmqlvxiqx.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxZ29kbnpycHhwem1xbHZ4aXF4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE3NjE3NzMsImV4cCI6MjA4NzMzNzc3M30.XInloRBhs81QcTKIwZ3z8bNG3BzHcK92BJbG5Ei7HuY';
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ----------------------------------------------------------------
+// State
+// ----------------------------------------------------------------
+let currentUser   = null;
+let allItems      = [];     // raw items from Supabase
+let userState     = {};     // { item_id: { read, starred } }
+let activeCategory = 'all';
+let activeWindow  = 24;     // hours
+let searchQuery   = '';
+let focusedIndex  = -1;
+
+// ----------------------------------------------------------------
+// Auth
+// ----------------------------------------------------------------
+async function initAuth() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    currentUser = session.user;
+    showApp();
+  } else {
+    showLogin();
+  }
+
+  sb.auth.onAuthStateChange((_event, session) => {
+    if (session) {
+      currentUser = session.user;
+      showApp();
+    } else {
+      currentUser = null;
+      showLogin();
+    }
+  });
+}
+
+function showLogin() {
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('login-screen').classList.add('flex');
+}
+
+function showApp() {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('login-screen').classList.remove('flex');
+  loadAll();
+}
+
+document.getElementById('login-btn').addEventListener('click', async () => {
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl    = document.getElementById('login-error');
+  errEl.classList.add('hidden');
+
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) {
+    errEl.textContent = error.message;
+    errEl.classList.remove('hidden');
+  }
+});
+
+document.getElementById('login-email').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('login-password').focus();
+});
+document.getElementById('login-password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('login-btn').click();
+});
+
+document.getElementById('sign-out-btn').addEventListener('click', async () => {
+  await sb.auth.signOut();
+  closeModal();
+});
+
+// ----------------------------------------------------------------
+// Data loading
+// ----------------------------------------------------------------
+async function loadAll() {
+  await Promise.all([loadItems(), loadUserState(), loadDigest()]);
+  renderFeed();
+  loadFeedsList();
+  loadProfile();
+}
+
+async function loadItems() {
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  // Get user's feed IDs first
+  const { data: feeds } = await sb.from('feeds')
+    .select('id')
+    .eq('active', true);
+
+  if (!feeds || feeds.length === 0) {
+    allItems = [];
+    return;
+  }
+
+  const feedIds = feeds.map(f => f.id);
+
+  const { data: items, error } = await sb.from('items')
+    .select('*')
+    .in('feed_id', feedIds)
+    .gte('published_at', cutoff)
+    .order('score', { ascending: false })
+    .limit(500);
+
+  if (error) { console.error(error); return; }
+  allItems = items || [];
+}
+
+async function loadUserState() {
+  const { data } = await sb.from('user_state')
+    .select('item_id, read, starred');
+  userState = {};
+  for (const row of (data || [])) {
+    userState[row.item_id] = { read: row.read, starred: row.starred };
+  }
+}
+
+async function loadDigest() {
+  const { data } = await sb.from('digests')
+    .select('*')
+    .order('generated_at', { ascending: false })
+    .limit(1);
+
+  if (!data || data.length === 0) return;
+  const digest = data[0];
+
+  document.getElementById('digest-overview').textContent = digest.overview || '';
+  document.getElementById('digest-banner').classList.remove('hidden');
+
+  const picksEl = document.getElementById('digest-picks');
+  picksEl.innerHTML = '';
+  for (const pick of (digest.picks || [])) {
+    const item = allItems.find(i => i.id === pick.item_id);
+    if (!item) continue;
+    const a = document.createElement('a');
+    a.href = item.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.className = 'text-[10px] text-accent-blue bg-accent-blue/10 border border-accent-blue/20 rounded px-2 py-1 hover:bg-accent-blue/20 transition-colors';
+    a.title = pick.reason || '';
+    a.textContent = '★ ' + item.title.slice(0, 60) + (item.title.length > 60 ? '…' : '');
+    picksEl.appendChild(a);
+  }
+}
+
+// ----------------------------------------------------------------
+// Rendering
+// ----------------------------------------------------------------
+function getFilteredItems() {
+  const cutoffMs = Date.now() - activeWindow * 60 * 60 * 1000;
+
+  return allItems.filter(item => {
+    const pub = item.published_at ? new Date(item.published_at).getTime() : 0;
+    if (pub < cutoffMs) return false;
+
+    if (activeCategory === 'starred') {
+      if (!userState[item.id]?.starred) return false;
+    } else if (activeCategory !== 'all') {
+      if (item.category !== activeCategory) return false;
+    }
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      if (!item.title.toLowerCase().includes(q) &&
+          !(item.summary || '').toLowerCase().includes(q) &&
+          !(item.source_name || '').toLowerCase().includes(q)) return false;
+    }
+
+    return true;
+  });
+}
+
+function renderFeed() {
+  const items   = getFilteredItems();
+  const feedEl  = document.getElementById('feed-list');
+  const loading = document.getElementById('feed-loading');
+
+  loading.classList.add('hidden');
+  feedEl.innerHTML = '';
+
+  document.getElementById('article-count').textContent = `${items.length} Articles`;
+
+  if (items.length === 0) {
+    feedEl.innerHTML = '<div class="p-10 text-center text-slate-600 text-[11px] uppercase tracking-widest">No articles</div>';
+    return;
+  }
+
+  // Render category groups
+  const byCategory = {};
+  for (const item of items) {
+    const cat = item.category || 'Uncategorized';
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(item);
+  }
+
+  const categories = activeCategory === 'all' || activeCategory === 'starred'
+    ? Object.keys(byCategory).sort()
+    : [activeCategory];
+
+  let globalIdx = 0;
+  for (const cat of categories) {
+    const catItems = byCategory[cat] || [];
+    if (catItems.length === 0) continue;
+
+    if (activeCategory === 'all' || activeCategory === 'starred') {
+      const header = document.createElement('div');
+      header.className = 'px-3 py-1 text-[9px] font-bold uppercase tracking-widest text-slate-600 bg-navy-panel/60 border-b border-slate-800/50 sticky top-0';
+      header.textContent = cat;
+      feedEl.appendChild(header);
+    }
+
+    for (const item of catItems) {
+      feedEl.appendChild(makeArticleRow(item, globalIdx));
+      globalIdx++;
+    }
+  }
+
+  renderCategoryButtons();
+  focusedIndex = -1;
+}
+
+function makeArticleRow(item, idx) {
+  const state   = userState[item.id] || {};
+  const isRead  = state.read    || false;
+  const isStar  = state.starred || false;
+  const score   = Math.round(item.score || 0);
+  const age     = formatAge(item.published_at);
+
+  const row = document.createElement('div');
+  row.className = `article-row border-b border-slate-800/50 ${isRead ? 'read' : ''} ${isStar ? 'starred' : ''}`;
+  row.dataset.id  = item.id;
+  row.dataset.idx = idx;
+  row.dataset.url = item.url;
+
+  row.innerHTML = `
+    <span class="w-8 text-[10px] font-bold text-accent-blue shrink-0 text-right">${score}</span>
+    <div class="flex-1 min-w-0">
+      <h2 class="text-[11px] font-medium text-text-main truncate">${escHtml(item.title)}</h2>
+    </div>
+    <span class="text-[9px] text-slate-500 shrink-0 hidden sm:block">${escHtml(item.source_name || '')}</span>
+    <span class="cat-badge" style="${catStyle(item.category)}">${escHtml(item.category || '')}</span>
+    ${isStar ? '<span class="material-symbols-outlined text-accent-blue text-sm shrink-0">star</span>' : ''}
+    <span class="text-[9px] text-slate-600 shrink-0">${age}</span>
+  `;
+
+  // Click: mark read + open
+  row.addEventListener('click', () => openItem(item, row));
+
+  // Prevent middle-click from also triggering
+  row.addEventListener('auxclick', e => {
+    if (e.button === 1) openItem(item, row, false);
+  });
+
+  return row;
+}
+
+function openItem(item, row, focus = true) {
+  markRead(item.id, row);
+  window.open(item.url, '_blank', 'noopener');
+}
+
+async function markRead(itemId, row) {
+  if (userState[itemId]?.read) return;
+  userState[itemId] = { ...(userState[itemId] || {}), read: true };
+  row.classList.add('read');
+  await upsertState(itemId, { read: true });
+}
+
+async function toggleStar(itemId) {
+  const current = userState[itemId]?.starred || false;
+  userState[itemId] = { ...(userState[itemId] || {}), starred: !current };
+  await upsertState(itemId, { starred: !current });
+  renderFeed();
+}
+
+async function upsertState(itemId, patch) {
+  const existing = userState[itemId] || {};
+  await sb.from('user_state').upsert({
+    user_id:    currentUser.id,
+    item_id:    itemId,
+    read:       existing.read    || false,
+    starred:    existing.starred || false,
+    ...patch,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id,item_id' });
+}
+
+// ----------------------------------------------------------------
+// Category sidebar
+// ----------------------------------------------------------------
+function renderCategoryButtons() {
+  const cats    = [...new Set(allItems.map(i => i.category).filter(Boolean))].sort();
+  const container = document.getElementById('category-buttons');
+  container.innerHTML = '';
+
+  for (const cat of cats) {
+    const btn = document.createElement('button');
+    btn.dataset.cat = cat;
+    btn.className = `cat-btn flex items-center w-full px-2 py-1.5 rounded text-[11px] font-semibold transition-colors
+      ${activeCategory === cat ? 'bg-accent-blue/10 text-accent-blue' : 'hover:bg-slate-800/50 text-slate-400'}`;
+    btn.innerHTML = `
+      <span class="material-symbols-outlined text-xl">folder</span>
+      <span class="ml-3 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">${escHtml(cat)}</span>
+    `;
+    btn.addEventListener('click', () => setCategory(cat));
+    container.appendChild(btn);
+  }
+}
+
+function setCategory(cat) {
+  activeCategory = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => {
+    const active = b.dataset.cat === cat;
+    b.classList.toggle('bg-accent-blue/10', active);
+    b.classList.toggle('text-accent-blue', active);
+    b.classList.toggle('text-slate-400', !active);
+    b.classList.toggle('hover:bg-slate-800/50', !active);
+  });
+  renderFeed();
+}
+
+document.querySelectorAll('.cat-btn').forEach(btn => {
+  btn.addEventListener('click', () => setCategory(btn.dataset.cat));
+});
+
+// ----------------------------------------------------------------
+// Time window buttons
+// ----------------------------------------------------------------
+document.querySelectorAll('.window-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeWindow = parseInt(btn.dataset.window);
+    document.querySelectorAll('.window-btn').forEach(b => {
+      b.classList.toggle('text-accent-blue', b === btn);
+      b.classList.toggle('text-slate-500', b !== btn);
+    });
+    renderFeed();
+  });
+});
+
+// ----------------------------------------------------------------
+// Search
+// ----------------------------------------------------------------
+document.getElementById('search-input').addEventListener('input', e => {
+  searchQuery = e.target.value.trim();
+  renderFeed();
+});
+
+// ----------------------------------------------------------------
+// Keyboard navigation
+// ----------------------------------------------------------------
+document.addEventListener('keydown', e => {
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+
+  const rows = [...document.querySelectorAll('.article-row')];
+  if (rows.length === 0) return;
+
+  if (e.key === 'j') {
+    focusedIndex = Math.min(focusedIndex + 1, rows.length - 1);
+    highlightRow(rows);
+  } else if (e.key === 'k') {
+    focusedIndex = Math.max(focusedIndex - 1, 0);
+    highlightRow(rows);
+  } else if (e.key === 'o' && focusedIndex >= 0) {
+    const row = rows[focusedIndex];
+    window.open(row.dataset.url, '_blank', 'noopener');
+    markRead(row.dataset.id, row);
+  } else if (e.key === 's' && focusedIndex >= 0) {
+    toggleStar(rows[focusedIndex].dataset.id);
+  }
+});
+
+function highlightRow(rows) {
+  rows.forEach((r, i) => r.classList.toggle('bg-accent-blue/5', i === focusedIndex));
+  rows[focusedIndex]?.scrollIntoView({ block: 'nearest' });
+}
+
+// ----------------------------------------------------------------
+// Modal
+// ----------------------------------------------------------------
+document.getElementById('manage-feeds-btn').addEventListener('click', openModal);
+document.getElementById('modal-close').addEventListener('click', closeModal);
+document.getElementById('modal-close-footer').addEventListener('click', closeModal);
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+
+function openModal() {
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  document.getElementById('modal-overlay').classList.add('flex');
+  loadFeedsList();
+  loadProfile();
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+  document.getElementById('modal-overlay').classList.remove('flex');
+}
+
+// Modal tabs
+document.querySelectorAll('.modal-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const target = tab.dataset.tab;
+    document.querySelectorAll('.modal-tab').forEach(t => {
+      t.classList.toggle('text-accent-blue', t === tab);
+      t.classList.toggle('border-accent-blue', t === tab);
+      t.classList.toggle('text-slate-500', t !== tab);
+      t.classList.toggle('border-transparent', t !== tab);
+    });
+    document.getElementById('tab-feeds').classList.toggle('hidden', target !== 'feeds');
+    document.getElementById('tab-profile').classList.toggle('hidden', target !== 'profile');
+  });
+});
+
+// ----------------------------------------------------------------
+// Feeds management
+// ----------------------------------------------------------------
+async function loadFeedsList() {
+  const { data: feeds, error } = await sb.from('feeds').select('*').order('name');
+  const el = document.getElementById('feeds-list');
+
+  if (error || !feeds || feeds.length === 0) {
+    el.innerHTML = '<div class="text-[11px] text-slate-600 py-4 text-center">No feeds yet. Add one above.</div>';
+    return;
+  }
+
+  el.innerHTML = '';
+  for (const feed of feeds) {
+    const row = document.createElement('div');
+    row.className = 'flex items-center justify-between p-3 bg-navy-deep/40 hover:bg-slate-800/40 border border-slate-800/50 rounded transition-all';
+    row.innerHTML = `
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-1.5 h-5 rounded-full shrink-0" style="background:${catColor(feed.category)}"></div>
+        <div class="min-w-0">
+          <div class="text-xs font-semibold text-white truncate">${escHtml(feed.name)}</div>
+          <div class="text-[9px] text-slate-500 truncate">${escHtml(feed.category)} · max ${feed.max_items}</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button class="toggle-btn p-1.5 transition-colors ${feed.active ? 'text-green-400 hover:text-slate-400' : 'text-slate-600 hover:text-green-400'}"
+          data-id="${feed.id}" data-active="${feed.active}" title="${feed.active ? 'Disable' : 'Enable'}">
+          <span class="material-symbols-outlined text-lg">${feed.active ? 'toggle_on' : 'toggle_off'}</span>
+        </button>
+        <button class="delete-btn p-1.5 text-slate-500 hover:text-red-400 transition-colors" data-id="${feed.id}" title="Delete">
+          <span class="material-symbols-outlined text-lg">delete</span>
+        </button>
+      </div>
+    `;
+    el.appendChild(row);
+  }
+
+  el.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const newActive = btn.dataset.active !== 'true';
+      await sb.from('feeds').update({ active: newActive }).eq('id', btn.dataset.id);
+      loadFeedsList();
+    });
+  });
+
+  el.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this feed and all its articles?')) return;
+      await sb.from('feeds').delete().eq('id', btn.dataset.id);
+      loadFeedsList();
+      loadAll();
+    });
+  });
+}
+
+document.getElementById('add-feed-btn').addEventListener('click', async () => {
+  const name     = document.getElementById('new-feed-name').value.trim();
+  const url      = document.getElementById('new-feed-url').value.trim();
+  const category = document.getElementById('new-feed-category').value.trim() || 'Uncategorized';
+  const maxItems = parseInt(document.getElementById('new-feed-max').value) || 10;
+  const tier     = parseInt(document.getElementById('new-feed-tier').value) || 2;
+  const errEl    = document.getElementById('add-feed-error');
+
+  errEl.classList.add('hidden');
+
+  if (!name || !url) {
+    errEl.textContent = 'Name and URL are required.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  const { error } = await sb.from('feeds').insert({
+    user_id: currentUser.id, name, url, category, max_items: maxItems, tier, active: true,
+  });
+
+  if (error) {
+    errEl.textContent = error.message;
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  ['new-feed-name','new-feed-url','new-feed-category'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('new-feed-max').value = '10';
+  document.getElementById('new-feed-tier').value = '2';
+  loadFeedsList();
+});
+
+// ----------------------------------------------------------------
+// Profile
+// ----------------------------------------------------------------
+async function loadProfile() {
+  const { data } = await sb.from('user_profiles')
+    .select('display_name, interests')
+    .eq('user_id', currentUser.id)
+    .single();
+
+  if (data) {
+    document.getElementById('profile-name').value      = data.display_name || '';
+    document.getElementById('profile-interests').value = data.interests    || '';
+  }
+}
+
+document.getElementById('save-profile-btn').addEventListener('click', async () => {
+  const display_name = document.getElementById('profile-name').value.trim();
+  const interests    = document.getElementById('profile-interests').value.trim();
+  const statusEl     = document.getElementById('profile-status');
+
+  await sb.from('user_profiles').upsert({
+    user_id: currentUser.id, display_name, interests, updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id' });
+
+  statusEl.textContent = 'Saved.';
+  statusEl.classList.remove('hidden');
+  setTimeout(() => statusEl.classList.add('hidden'), 2000);
+});
+
+// ----------------------------------------------------------------
+// Helpers
+// ----------------------------------------------------------------
+function escHtml(str) {
+  return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatAge(iso) {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  const h = Math.floor(diff / 3600000);
+  if (h < 1)  return `${Math.floor(diff / 60000)}m`;
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+const CAT_COLORS = [
+  '#38bdf8','#f472b6','#4ade80','#fbbf24','#f87171',
+  '#a78bfa','#34d399','#fb923c','#60a5fa','#e879f9',
+];
+const catColorCache = {};
+let catColorIdx = 0;
+function catColor(cat) {
+  if (!cat) return '#64748b';
+  if (!catColorCache[cat]) catColorCache[cat] = CAT_COLORS[catColorIdx++ % CAT_COLORS.length];
+  return catColorCache[cat];
+}
+
+function catStyle(cat) {
+  const c = catColor(cat);
+  return `color:${c};background:${c}1a;border-color:${c}33;`;
+}
+
+// ----------------------------------------------------------------
+// Boot
+// ----------------------------------------------------------------
+initAuth();
+</script>
+</body>
+</html>
