@@ -424,9 +424,29 @@ document.getElementById('sign-out-btn').addEventListener('click', async () => {
 // ----------------------------------------------------------------
 async function loadAll() {
   await Promise.all([loadItems(), loadUserState(), loadDigest()]);
+  await loadSavedItems();
   renderFeed();
   loadFeedsList();
   loadProfile();
+}
+
+async function loadSavedItems() {
+  // Fetch all starred item IDs from user_state
+  const { data: starredState } = await sb.from('user_state')
+    .select('item_id')
+    .eq('user_id', currentUser.id)
+    .eq('starred', true);
+
+  if (!starredState || starredState.length === 0) return;
+
+  // Only fetch items not already in allItems (e.g. older than 30 days)
+  const existingIds = new Set(allItems.map(i => i.id));
+  const missingIds  = starredState.map(s => s.item_id).filter(id => !existingIds.has(id));
+
+  if (missingIds.length === 0) return;
+
+  const { data: items } = await sb.from('items').select('*').in('id', missingIds);
+  if (items && items.length > 0) allItems = [...allItems, ...items];
 }
 
 async function loadItems() {
@@ -500,8 +520,11 @@ function getFilteredItems() {
   const cutoffMs = Date.now() - activeWindow * 60 * 60 * 1000;
 
   return allItems.filter(item => {
-    const pub = item.published_at ? new Date(item.published_at).getTime() : 0;
-    if (pub < cutoffMs) return false;
+    // Saved view shows all starred items regardless of time window
+    if (activeCategory !== 'starred') {
+      const pub = item.published_at ? new Date(item.published_at).getTime() : 0;
+      if (pub < cutoffMs) return false;
+    }
 
     if (activeCategory === 'starred') {
       if (!userState[item.id]?.starred) return false;
