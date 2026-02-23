@@ -372,6 +372,8 @@ let activeWindow  = 24;     // hours
 let searchQuery   = '';
 let focusedIndex  = -1;
 let expandedItemId = null;
+let activeSort    = 'time';  // 'score' | 'category' | 'time'
+let sortAsc       = false;   // false = desc (newest/highest first)
 let addedFeedUrls  = new Set(); // URLs of feeds already subscribed to
 
 // ----------------------------------------------------------------
@@ -530,6 +532,22 @@ async function loadDigest() {
 // ----------------------------------------------------------------
 // Rendering
 // ----------------------------------------------------------------
+function getSortedItems(items) {
+  return [...items].sort((a, b) => {
+    let cmp = 0;
+    if (activeSort === 'score') {
+      cmp = (b.score || 0) - (a.score || 0);
+    } else if (activeSort === 'category') {
+      cmp = (a.category || '').localeCompare(b.category || '');
+    } else {
+      const ta = a.published_at ? new Date(a.published_at).getTime() : 0;
+      const tb = b.published_at ? new Date(b.published_at).getTime() : 0;
+      cmp = tb - ta;
+    }
+    return sortAsc ? -cmp : cmp;
+  });
+}
+
 function getFilteredItems() {
   const cutoffMs = Date.now() - activeWindow * 60 * 60 * 1000;
 
@@ -558,7 +576,7 @@ function getFilteredItems() {
 }
 
 function renderFeed() {
-  const items   = getFilteredItems();
+  const items   = getSortedItems(getFilteredItems());
   const feedEl  = document.getElementById('feed-list');
   const loading = document.getElementById('feed-loading');
 
@@ -567,39 +585,51 @@ function renderFeed() {
 
   document.getElementById('article-count').textContent = `${items.length} Articles`;
 
+  // Sort column header
+  const colHeader = document.createElement('div');
+  colHeader.className = 'flex items-center gap-2 px-3 py-1 border-b border-slate-800 bg-navy-panel sticky top-0 z-10 select-none';
+  const mkColBtn = (col, label, extraClass = '') => {
+    const active = activeSort === col;
+    const arrow  = active ? (sortAsc ? ' ↑' : ' ↓') : '';
+    return `<button class="sort-col-btn shrink-0 text-[8px] font-bold uppercase tracking-widest cursor-pointer ${active ? 'text-accent-blue' : 'text-slate-600 hover:text-slate-400'} ${extraClass}" data-col="${col}">${label}${arrow}</button>`;
+  };
+  colHeader.innerHTML = `
+    ${mkColBtn('score', 'Score', 'w-8 text-right')}
+    <div class="flex-1 min-w-0 text-[8px] font-bold uppercase tracking-widest text-slate-700">Title</div>
+    <span class="text-[8px] font-bold uppercase tracking-widest text-slate-700 shrink-0 hidden sm:block">Source</span>
+    ${mkColBtn('category', 'Cat')}
+    <span class="w-4 shrink-0"></span>
+    ${mkColBtn('time', 'Time')}
+    <span class="w-4 shrink-0"></span>
+  `;
+  colHeader.querySelectorAll('.sort-col-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const col = btn.dataset.col;
+      if (activeSort === col) {
+        sortAsc = !sortAsc;
+      } else {
+        activeSort = col;
+        sortAsc = col === 'category'; // A→Z default for category; desc for score/time
+      }
+      renderFeed();
+    });
+  });
+  feedEl.appendChild(colHeader);
+
   if (items.length === 0) {
-    feedEl.innerHTML = '<div class="p-10 text-center text-slate-600 text-[11px] uppercase tracking-widest">No articles</div>';
+    const empty = document.createElement('div');
+    empty.className = 'p-10 text-center text-slate-600 text-[11px] uppercase tracking-widest';
+    empty.textContent = 'No articles';
+    feedEl.appendChild(empty);
+    renderCategoryButtons();
+    focusedIndex = -1;
     return;
   }
 
-  // Render category groups
-  const byCategory = {};
-  for (const item of items) {
-    const cat = item.category || 'Uncategorized';
-    if (!byCategory[cat]) byCategory[cat] = [];
-    byCategory[cat].push(item);
-  }
-
-  const categories = activeCategory === 'all' || activeCategory === 'starred'
-    ? Object.keys(byCategory).sort()
-    : [activeCategory];
-
   let globalIdx = 0;
-  for (const cat of categories) {
-    const catItems = byCategory[cat] || [];
-    if (catItems.length === 0) continue;
-
-    if (activeCategory === 'all' || activeCategory === 'starred') {
-      const header = document.createElement('div');
-      header.className = 'px-3 py-1 text-[9px] font-bold uppercase tracking-widest text-slate-600 bg-navy-panel/60 border-b border-slate-800/50 sticky top-0';
-      header.textContent = cat;
-      feedEl.appendChild(header);
-    }
-
-    for (const item of catItems) {
-      feedEl.appendChild(makeArticleRow(item, globalIdx));
-      globalIdx++;
-    }
+  for (const item of items) {
+    feedEl.appendChild(makeArticleRow(item, globalIdx));
+    globalIdx++;
   }
 
   renderCategoryButtons();
